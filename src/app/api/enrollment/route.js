@@ -1,4 +1,3 @@
-import { DB } from "@/libs/DB";
 import { checkToken } from "@/libs/checkToken";
 import { getPrisma } from "@/libs/getPrisma";
 import { NextResponse } from "next/server";
@@ -68,7 +67,7 @@ export const POST = async (request) => {
     );
   }
 
-  //read body request & validate it
+  // Read body request & validate it
   const body = await request.json();
   const { courseNo } = body;
   if (typeof courseNo !== "string" || courseNo.length !== 6) {
@@ -82,12 +81,14 @@ export const POST = async (request) => {
   }
 
   const prisma = getPrisma();
-  const course = await prisma.course.findFirst({
+
+  // 1. Check if courseNo does not exist in the database
+  const courseExists = await prisma.course.findUnique({
     where: {
-      courseNo,
+      courseNo: courseNo,
     },
   });
-  if (!course) {
+  if (!courseExists) {
     return NextResponse.json(
       {
         ok: false,
@@ -96,22 +97,16 @@ export const POST = async (request) => {
       { status: 400 }
     );
   }
-  //1.check if courseNo does not exist on database
-  //send this response back if courseNo does not exist
-  // return NextResponse.json(
-  //   {
-  //     ok: false,
-  //     message: "Course number does not exist",
-  //   },
-  //   { status: 400 }
-  // );
-  const enrolled = await prisma.enrollment.findFirst({
+
+  // 2. Check if the student has already enrolled in this course
+  const existingEnrollment = await prisma.enrollment.findFirst({
     where: {
-      courseNo,
-      studentId,
+      studentId: studentId,
+      courseNo: courseNo,
     },
   });
-  if (enrolled) {
+
+  if (existingEnrollment) {
     return NextResponse.json(
       {
         ok: false,
@@ -119,29 +114,15 @@ export const POST = async (request) => {
       },
       { status: 400 }
     );
-  } else {
-    const users = await prisma.enrollment.create({
-      data: {
-        studentId,
-        courseNo,
-      },
-    });
   }
-  //2.check if such student enroll that course already (both "studentId" and "courseNo" exists on enrollment collection)
-  // return NextResponse.json(
-  //   {
-  //     ok: false,
-  //     message: "You already registered this course",
-  //   },
-  //   { status: 400 }
-  // );
 
-  //3.if conditions above are not met, perform inserting data here
-  // await prisma.enrollment.create({
-  //   data:{
-  //     ...
-  //   }
-  // })
+  // 3. If conditions above are not met, perform inserting data here
+  await prisma.enrollment.create({
+    data: {
+      studentId: studentId,
+      courseNo: courseNo,
+    },
+  });
 
   return NextResponse.json({
     ok: true,
